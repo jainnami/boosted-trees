@@ -24,7 +24,7 @@ To run this project, you'll need:
 1. **Clone this repository**:
    ```bash
    git clone <repository_url>
-   cd project-2-boosted-trees
+   cd boosted-trees
 
 
 ## Links
