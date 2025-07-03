@@ -1,0 +1,1097 @@
+---
+title: "Project 2: Boosted Trees"
+author: "Group 7 Branching Out: Nami Jain, Christian Lauture, Brandon Huang, Jianlai Liu"
+date: December 2, 2024
+fontsize: 9pt
+classoption: "aspectratio=169"
+output:
+  xaringan::moon_reader:
+    css: xaringan-themer.css
+---
+```{r include=FALSE}
+library(xaringan)
+library(flexdashboard)
+library(blogdown)
+library(bookdown)
+library(officer)
+library(rticles)
+library(kableExtra)
+library(webshot)
+library(magick)
+library(memor)
+library(tidyverse)
+library(babynames)
+library(arm)
+library(bakeoff)
+library(knitr)
+library(xaringanthemer)
+library(magick)
+library(knitr)
+```
+
+```{r xaringan-themer, include=FALSE, warning=FALSE}
+style_mono_accent(
+  base_color = "#472A28",
+  text_color = "#000000",
+  header_color = "#472A28",
+  header_font_google = google_font("Libre Baskerville"),
+  text_font_google   = google_font("Montserrat", "300", "300i"),
+  code_font_google   = google_font("Fira Mono")
+)
+```
+
+
+
+```{r include=FALSE}
+library(dplyr)
+obesity = read.csv("C:/Users/cest_/OneDrive/Documents/WORK/CMDA4654/Project 2/archive/ObesityDataSet_raw_and_data_sinthetic.csv")
+colSums(is.na(obesity))
+```
+
+## Introduction to Boosted Trees
+- Combines multiple weak learners to improve accuracy and performance
+     - Each tree's prediction is based on the results of the previous trees
+     - The final prediction is based on the entire ensemble of tree
+
+- Decision Tree: takes a set of input features and splits input data recursively
+ 
+ 
+- Boosting sequentially trains models to focus on areas where previous models performed poorly
+
+```{r echo=FALSE, fig.align = 'center'}
+boosted_tree <- image_read("boostedtree1.png")
+boosted_tree <- image_resize(boosted_tree, "80%")
+boosted_tree
+```
+
+
+---
+
+## Motivation for Using Boosted Trees 
+```{r echo=FALSE}
+# Create a data frame with two columns: Pros and Cons
+pros_cons <- data.frame(
+  Pros = c(
+    "Training and prediction is fast",
+    "Good performance",
+    "Available for a lot of software"
+  ),
+  Cons = c(
+    "Sensitive to overfitting and noise",
+    "Computationally expensive for large datasets", # To align the rows if there are more pros than cons
+    ""
+  )
+)
+
+# Display the table using knitr::kable for clean output
+kable(pros_cons)
+```
+
+---
+
+## When to Use Boosted Trees
+- Should be used when you need high predictive accuracy on complex datasets, especially with non-linear relationships between features
+- Boosted trees excel at capturing intricate patterns
+
+```{r echo=FALSE, fig.align = 'center'}
+library(magick)
+boosted_tree <- image_read("boostedtree2.png")
+boosted_tree <- image_resize(boosted_tree, "80%")
+boosted_tree
+```
+---
+
+## Key Concepts in Boosted Trees 
+- **Ensemble Learning**: Combines multiple weak learners (shallow decision trees) to create a stronger predictive model.
+
+- **Sequential Training**: Trees are trained iteratively, each focusing on the errors of the previous tree.
+
+- **Data Weighting**: Misclassified points are given higher weights, influencing the next tree’s focus.
+
+- **Learning Rate**: Controls the contribution of each tree; lower rates reduce overfitting but require more trees.
+---
+## Key Concepts in Boosted Trees (Part 2)
+- **Residuals**: New trees predict the errors (residuals) of the previous trees, improving overall accuracy.
+
+- **Loss Function**: Minimizes a chosen loss function (e.g., mean squared error or log-loss) to improve model performance.
+
+- **Regularization**: Prevents overfitting by limiting tree depth or using early stopping criteria.
+
+- **Model Combination**: Final prediction is based on a weighted combination of individual tree outputs.
+
+---
+
+## Understanding Weak Learners  
+Weak learners are simple models, which perform slightly better than random guessing. 
+Weak models are usually decision trees, allowing for significantly better performing ensemble learning.
+
+A quick example would be identifying a cat image. Weak learners can be pointy ears or cat-shaped eyes. Boosting would combine these weak learners to fully identify the cat image.
+
+
+```{r echo=FALSE, fig.align='center'}
+weak_learners <- image_read("weaklearners.png")
+weak_learners <- image_resize(weak_learners, "40%")
+weak_learners
+```
+
+
+---
+
+## Algorithm: Step-by-Step
+For gradient boosting algorithms, the algorithm goes as follows:
+1. **Choose a loss function** $L(y_i, f(x_i))$
+     - Derivative of this function is the gradient 
+2. **Initialize the leaf of the tree** with an initial prediction:
+     - Using the average of the target variable values 
+     - Formula for average: $\gamma = \frac{\sum_{i}y_i}{n}$
+3. For all data points: 
+     - **Calculate the gradient** of the loss function for all data points:
+        - Gradient equals the residual
+     - **Build a decision tree** to predict the residuals. 
+     - **Update the prediction** of the target variable: 
+        - $Pred_t(x) = Pred_{t-1}(x) + lr \cdot output(F_1(x_i))$
+- Repeat **step 3** until the number of iterations is equal to the number of estimators
+ 
+- Use all trees to make the final prediction
+---
+
+## Common Parameters in Boosted Trees
+- **Max Depth:** Number of levels in each decision tree
+     - max_depth in XGBoost
+ 
+- **Learning Rate:** How fast the model learns
+    - Lower learning rate: model learns slower, but is more robust and efficient
+    - eta in XGBoost
+    
+- **Number of trees:** How many trees are used in the model
+    - More is usually better, but can lead to overfitting
+    - nrounds in XGBoost
+    
+---
+## Introduction to Baby Example
+The Iris dataset is a small, simple machine learning dataset with 150 samples each of 4 features. The features are sepal length/width and petal length/width. The target variable has 3 classes of iris species, which are composed of: Setosa, Versicolor, and Virginica. 
+
+---
+
+## XGBoost on Baby Example [CODE]
+
+```{r echo=TRUE, results = "hide", message=FALSE, warning=FALSE}
+library(ggplot2) ## For data visualization
+library(caret) ## For data partitioning and evaluation metrics
+library(xgboost) ## For gradient boost 
+
+data(iris) ## Loading iris dataset
+
+set.seed(123) ## Setting a random seed for reproducibility
+
+summary(iris) ## Display a summary
+
+iris$Species <- as.factor(iris$Species) ## Convert Species into a factor
+```
+---
+## XGBoost on Baby Example [CODE] Part 2
+```{r echo=TRUE, results = "hide", message=FALSE, warning=FALSE}
+# Split data in 80/20 set
+train = createDataPartition(iris$Species, p = 0.8, list = FALSE) 
+
+train_data <- iris[train,]
+test_data <- iris[-train,]
+
+train_matrix <- as.matrix(train_data[,-5])
+test_matrix <- as.matrix(test_data[, -5])
+
+# Convert to numeric values
+train_target <- as.numeric(train_data$Species) - 1
+test_target <- as.numeric(test_data$Species) - 1
+```
+---
+## XGBoost on Baby Example [CODE] Part 3
+```{r echo=TRUE, results = "hide", message=FALSE, warning=FALSE}
+# nrounds: number of iterations
+# max_depth: number of trees
+# eta: learning rate
+# num_class: number of classes in target variable
+# objective: multiclass classification objective
+gradient_boost <- xgboost(data = train_matrix, label = train_target, nrounds = 100, objective = "multi:softmax", 
+                     num_class = 3, max_depth = 3, eta = 0.1, verbose = 1)
+
+# Use prediction function to generate predictions
+prediction <- predict(gradient_boost, newdata = test_matrix)
+
+# Generate confusion matrix to evaluate model accuracy
+confusion = confusionMatrix(factor(prediction), factor(test_target))
+```
+---
+## XGBoost on Baby Example [CODE] Part 4
+```{r echo=TRUE, results = "hide", message=FALSE, warning=FALSE, fig.show="hide"}
+## Display results in a data frame
+results <- data.frame(
+  Predicted = factor(prediction, levels = 0:2, labels = levels(test_data$Species)),
+  Actual = factor(test_target, levels = 0:2, labels = levels(test_data$Species)),
+  Sepal.Length = test_data$Sepal.Length,
+  Sepal.Width = test_data$Sepal.Width,
+  Petal.Length = test_data$Petal.Length,
+  Petal.Width = test_data$Petal.Width
+)
+```
+
+---
+## XGBoost on Baby Example
+```{r include =FALSE}
+
+# Visualize feature importance
+importance <- xgb.importance(feature_names = colnames(train_matrix), model = gradient_boost)
+importance_plot <- xgb.plot.importance(importance, rel_to_first = TRUE, xlab = "Relative Importance", ylab = "Features", plot = FALSE)
+
+png("FeatureImportance.png", width = 2500, height = 2000, res = 300)
+library(ggplot2)
+ggplot(importance, aes(x = reorder(Feature, Gain), y = Gain)) +
+  geom_bar(stat = "identity", fill = "gray") +
+  coord_flip() +
+  labs(
+    title = "Feature Importance from XGBoost Model",
+    x = "Features",
+    y = "Relative Importance"
+  ) +
+  theme_minimal()
+dev.off()
+```
+ 
+<div style="text-align:center; margin-top:-20px;">
+```{r echo=FALSE, fig.align='center', out.width = "75%"}
+library(magick)
+knitr::include_graphics("FeatureImportance.png")
+```
+</div>
+
+---
+## Confusion Matrix for Gradient Boost on Baby Dataset
+
+```{r include=FALSE}
+print(confusion)
+```
+
+```{r echo=FALSE}
+confusion_matrix <- as.data.frame.matrix(confusion$table)
+ 
+# Add row and column names 
+rownames(confusion_matrix) <- paste("Prediction:", rownames(confusion_matrix))
+colnames(confusion_matrix) <- paste("Reference:", colnames(confusion_matrix))
+ 
+ 
+# Extract only the first row of overall statistics (Accuracy)
+overall_stats <- data.frame(
+  Metric = c("Accuracy"),
+  Value = c(confusion$overall['Accuracy'])
+)
+ 
+# Extract statistics by class and select only "Sensitivity" and "Specificity"
+class_stats <- as.data.frame(t(confusion$byClass))
+class_stats <- class_stats %>%
+  rownames_to_column(var = "Metric") %>%
+  filter(Metric %in% c("Sensitivity", "Specificity")) %>%  # Select only Sensitivity and Specificity
+  rename_with(~ gsub("\\.", " ", .)) %>%
+  mutate(across(-Metric, ~ round(as.numeric(.), 4))) # Round numeric values
+ 
+ 
+kable(overall_stats, format = "html", caption = "Overall Statistics for Gradient Boost Model") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), full_width = FALSE)
+ 
+ 
+kable(class_stats, format = "html", caption = "Statistics by Class") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), full_width = FALSE)
+ 
+kable(confusion_matrix, format = "html", caption = "Confusion Matrix") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), full_width = FALSE)
+```
+
+---
+## Analysis for Gradient Boost on Baby Dataset
+
+```{r echo=FALSE}
+# Create a data frame with the summary points
+slide_data <- data.frame(
+  Category = c("Accuracy", "Setosa & Virginica", "Versicolor", "Feature Importance"),
+  Details = c(
+    "93.33%",
+    "Perfect classification",
+    "2 misclassified as Virginica (Specificity: 0.9)",
+    "Petal length (50%) and width (45%) dominate; Sepal length/width minimal"
+  )
+)
+
+# Display the table
+knitr::kable(slide_data)
+
+```
+
+---
+
+## Introduction to the Large Dataset
+**Large Dataset:** https://drive.google.com/file/d/1x5jE0lJ_HX92F3pr2co8IfqIcT6zXuuy/view?usp=sharing
+ 
+```{r echo=FALSE}
+# Create a data frame summarizing the dataset
+obesity_dataset_summary <- data.frame(
+  Attribute = c("Personal", "Lifestyle", "Health", "Others", "Target Variable"),
+  Details = c(
+    "Age, Gender, Height, Weight",
+    "Caloric intake (CALC), High-calorie food (FAVC), Vegetables (FCVC)",
+    "Smoking (SMOKE), Water intake (CH2O), Physical activity (FAF)",
+    "Family history, Tech use (TUE), Snacking (CAEC), Transportation (MTRANS)",
+    "NObeyesdad categorizes obesity levels"
+  )
+)
+
+# Display the table
+knitr::kable(obesity_dataset_summary)
+
+```
+
+---
+
+## Single Tree for Large Dataset 
+```{r echo = FALSE, warning = FALSE}
+library(readr)
+library(dplyr)
+library(rpart)
+library(caret)
+library(rpart.plot)
+# Load and preprocess data
+obesity = read.csv("C:/Users/cest_/OneDrive/Documents/WORK/CMDA4654/Project 2/archive/ObesityDataSet_raw_and_data_sinthetic.csv")
+colnames(obesity) <- c("Age", "Gender", "Height", "Weight", "Caloric_Intake", "High_Calorie_Consump", "Vegetetable_Consump", "Main_Meals", "Sweet_Drinks_Consump", "Smoking", "Daily_Water_Intake", "Family_History_Overweight", "Physical_Activity_Frequency", "Time_Tech_Devices", "Food_Between_Meals_Consump", "Transportation_Type", "Obesity_Level")
+ 
+# Encoding categorical variables
+obesity$High_Calorie_Consump <- ifelse(obesity$High_Calorie_Consump == "yes", 1, 0)
+obesity$Sweet_Drinks_Consump <- ifelse(obesity$Sweet_Drinks_Consump == "yes", 1, 0)
+obesity$Smoking <- ifelse(obesity$Smoking == "yes", 1, 0)
+obesity$Family_History_Overweight <- ifelse(obesity$Family_History_Overweight == "yes", 1, 0)
+ 
+obesity$Caloric_Intake <- dplyr::recode(obesity$Caloric_Intake, 
+                                        "no" = 0, 
+                                        "Sometimes" = 1, 
+                                        "Frequently" = 2,
+                                        "Always" = 3)
+obesity$Gender <- dplyr::recode(obesity$Gender, 
+                                "Female" = 0, 
+                                "Male" = 1)
+obesity$Food_Between_Meals_Consump <- dplyr::recode(obesity$Food_Between_Meals_Consump, 
+                                                    "no" = 0, 
+                                                    "Sometimes" = 1, 
+                                                    "Frequently" = 2,
+                                                    "Always" = 3)
+obesity$Transportation_Type <- dplyr::recode(obesity$Transportation_Type, 
+                                             "Walking" = 0, 
+                                             "Public_Transportation" = 1, 
+                                             "Bike" = 2,
+                                             "Motorbike" = 3,
+                                             "Automobile" = 4)
+ 
+# Convert target to a factor
+obesity$Obesity_Level <- as.factor(obesity$Obesity_Level)
+ 
+# Train-test split
+set.seed(123)
+obesity_train = createDataPartition(obesity$Obesity_Level, p = 0.7, list = FALSE)
+obesity_train_data <- obesity[obesity_train,]
+obesity_test_data <- obesity[-obesity_train,]
+ 
+# Fit a single decision tree using rpart
+single_tree <- rpart(Obesity_Level ~ ., data = obesity_train_data, method = "class")
+ 
+# Make predictions on the test set
+tree_predictions <- predict(single_tree, newdata = obesity_test_data, type = "class")
+ 
+# Generate confusion matrix
+tree_confusion <- confusionMatrix(tree_predictions, obesity_test_data$Obesity_Level)
+ 
+# Generate the confusion matrix
+conf_matrix <- as.data.frame.matrix(tree_confusion$table)
+# Extract selected statistics
+overall_clean <- data.frame(
+  Statistic = c("Accuracy", "Kappa", "AccuracyLower", "AccuracyUpper"),
+  Value = c(
+    tree_confusion$overall["Accuracy"],
+    tree_confusion$overall["Kappa"],
+    tree_confusion$overall["AccuracyLower"],
+    tree_confusion$overall["AccuracyUpper"]
+  )
+)
+class_stats <- as.data.frame(t(tree_confusion$byClass))
+ 
+# Display the confusion matrix with a smaller size
+kable(conf_matrix, format = "html", caption = "Confusion Matrix for Single Decision Tree") %>%
+  kable_styling(
+    bootstrap_options = c("striped", "hover", "condensed", "responsive"), 
+    full_width = FALSE, 
+    font_size = 10 # Reduce the font size
+  ) %>%
+  column_spec(1, width = "3cm") # Adjust column width if needed
+ 
+# Transpose for single-row display
+overall_clean <- as.data.frame(t(overall_clean$Value))
+colnames(overall_clean) <- c("Accuracy", "Kappa", "AccuracyLower", "AccuracyUpper")
+ 
+# Display as a single row table
+kable(overall_clean, format = "html", caption = "Overall Statistics") %>%
+  kable_styling(
+    bootstrap_options = c("striped", "hover", "condensed", "responsive"), 
+    full_width = FALSE, 
+    font_size = 10
+  )
+ 
+# Select and display only Sensitivity and Specificity from Statistics by Class
+class_clean <- class_stats[c("Sensitivity", "Specificity"), ]
+kable(class_clean, format = "html", caption = "Statistics by Class") %>%
+  kable_styling(
+    bootstrap_options = c("striped", "hover", "condensed", "responsive"), 
+    full_width = FALSE, 
+    font_size = 10
+  )
+```
+ 
+---
+ 
+## Single Tree Analysis
+```{r echo = FALSE}
+# Create a data frame for slide content
+single_tree_summary <- data.frame(
+  Key_Points = c(
+    "Accuracy: 88.61%, indicating effective classification overall.",
+    "Strengths: High specificity for Obesity Type III and Obesity Type I.",
+    "Limitations: Struggled with Normal Weight (sensitivity: 0.593).",
+    "Misclassifications: Issues between Overweight Levels I and II.",
+    "Improvements: Use ensemble methods (Random Forest, XGBoost) and address class imbalance."
+  )
+)
+
+# Display the table with knitr::kable
+knitr::kable(single_tree_summary, col.names = NULL)
+
+```
+---
+```{r echo = FALSE, include = FALSE, eval = FALSE}
+png("decision_tree.png", width = 4500, height = 3400, res = 300)
+ 
+rpart.plot(
+  single_tree,
+  type = 1,                # Show only split labels (no probabilities)
+  extra = 0,               # Remove additional details
+  fallen.leaves = TRUE,    # Align leaf nodes
+  cex = 0.6,               # Adjust text size
+  faclen = 0,              # Show full feature names
+  tweak = 1.4,             # Adjust spacing
+  box.palette = "RdBu",    # Color the boxes
+  shadow.col = "gray",     # Add shadows
+  digits = 4,              # Show 4 decimal places for split values
+  roundint = FALSE,
+  main = "Decision Tree with Exact Split Thresholds"
+)
+ 
+dev.off()
+```
+
+```{r echo=FALSE, fig.align='center'}
+decision_tree <- image_read("decision_tree.png")
+decision_tree <- image_scale(decision_tree, "35%") 
+decision_tree
+``` 
+
+---
+
+## Random Forest for Large Dataset
+```{r include=FALSE}
+library(readr)
+library(dplyr)
+library(randomForest)
+library(caret)
+ 
+# Load and preprocess data
+obesity = read.csv("C:/Users/cest_/OneDrive/Documents/WORK/CMDA4654/Project 2/archive/ObesityDataSet_raw_and_data_sinthetic.csv")
+colnames(obesity) <- c("Age", "Gender", "Height", "Weight", "Caloric_Intake", "High_Calorie_Consump", "Vegetetable_Consump", "Main_Meals", "Sweet_Drinks_Consump", "Smoking", "Daily_Water_Intake", "Family_History_Overweight", "Physical_Activity_Frequency", "Time_Tech_Devices", "Food_Between_Meals_Consump", "Transportation_Type", "Obesity_Level")
+ 
+# Encoding categorical variables
+obesity$High_Calorie_Consump <- ifelse(obesity$High_Calorie_Consump == "yes", 1, 0)
+obesity$Sweet_Drinks_Consump <- ifelse(obesity$Sweet_Drinks_Consump == "yes", 1, 0)
+obesity$Smoking <- ifelse(obesity$Smoking == "yes", 1, 0)
+obesity$Family_History_Overweight <- ifelse(obesity$Family_History_Overweight == "yes", 1, 0)
+ 
+obesity$Caloric_Intake <- dplyr::recode(obesity$Caloric_Intake, 
+                                        "no" = 0, 
+                                        "Sometimes" = 1, 
+                                        "Frequently" = 2,
+                                        "Always" = 3)
+obesity$Gender <- dplyr::recode(obesity$Gender, 
+                                "Female" = 0, 
+                                "Male" = 1)
+obesity$Food_Between_Meals_Consump <- dplyr::recode(obesity$Food_Between_Meals_Consump, 
+                                                    "no" = 0, 
+                                                    "Sometimes" = 1, 
+                                                    "Frequently" = 2,
+                                                    "Always" = 3)
+obesity$Transportation_Type <- dplyr::recode(obesity$Transportation_Type, 
+                                             "Walking" = 0, 
+                                             "Public_Transportation" = 1, 
+                                             "Bike" = 2,
+                                             "Motorbike" = 3,
+                                             "Automobile" = 4)
+ 
+# Convert target to a factor
+obesity$Obesity_Level <- as.factor(obesity$Obesity_Level)
+ 
+# Train-test split
+set.seed(123)
+obesity_train = createDataPartition(obesity$Obesity_Level, p = 0.7, list = FALSE)
+obesity_train_data <- obesity[obesity_train,]
+obesity_test_data <- obesity[-obesity_train,]
+ 
+# Fit a random forest model
+rf_model <- randomForest(Obesity_Level ~ ., 
+                         data = obesity_train_data, 
+                         ntree = 100,       # Number of trees in the forest
+                         mtry = 4,          # Number of features considered for splitting at each node
+                         importance = TRUE, # Compute variable importance
+                         seed = 123)
+ 
+# View the random forest model summary
+print(rf_model)
+ 
+# Predict on the test set
+rf_predictions <- predict(rf_model, newdata = obesity_test_data)
+ 
+# Generate confusion matrix
+rf_confusion <- confusionMatrix(rf_predictions, obesity_test_data$Obesity_Level)
+ 
+# Print confusion matrix and performance metrics
+print(rf_confusion)
+ 
+# Plot feature importance
+varImpPlot(rf_model)
+```
+ 
+```{r echo=FALSE}
+# Confusion Matrix Table
+conf_matrix_rf <- as.data.frame.matrix(rf_confusion$table)
+ 
+# Extract selected overall statistics
+overall_clean_rf <- data.frame(
+  Statistic = c("Accuracy", "Kappa", "AccuracyLower", "AccuracyUpper"),
+  Value = c(
+    rf_confusion$overall["Accuracy"],
+    rf_confusion$overall["Kappa"],
+    rf_confusion$overall["AccuracyLower"],
+    rf_confusion$overall["AccuracyUpper"]
+  )
+)
+ 
+# Transpose for single-row display
+overall_clean_rf <- as.data.frame(t(overall_clean_rf$Value))
+colnames(overall_clean_rf) <- c("Accuracy", "Kappa", "AccuracyLower", "AccuracyUpper")
+ 
+ 
+# Display Confusion Matrix Table
+kable(conf_matrix_rf, format = "html", caption = "Confusion Matrix for Random Forest") %>%
+  kable_styling(
+    bootstrap_options = c("striped", "hover", "condensed", "responsive"), 
+    full_width = FALSE, 
+    font_size = 10
+  ) %>%
+  column_spec(1, width = "3cm")
+ 
+ 
+# Display Overall Statistics for Random Forest
+kable(overall_clean_rf, format = "html", caption = "Overall Statistics") %>%
+  kable_styling(
+    bootstrap_options = c("striped", "hover", "condensed", "responsive"), 
+    full_width = FALSE, 
+    font_size = 10
+  )
+ 
+# Extract Sensitivity and Specificity for all classes
+class_clean_rf <- rf_confusion$byClass[, c("Sensitivity", "Specificity")]
+ 
+# Transpose the table for better readability
+class_clean_rf_transposed <- as.data.frame(t(class_clean_rf))
+colnames(class_clean_rf_transposed) <- gsub("Class: ", "", rownames(rf_confusion$byClass)) # Clean column names
+rownames(class_clean_rf_transposed) <- c("Sensitivity", "Specificity") # Set row names
+ 
+# Display Transposed Statistics by Class for Random Forest
+kable(class_clean_rf_transposed, format = "html", caption = "Statistics by Class") %>%
+  kable_styling(
+    bootstrap_options = c("striped", "hover", "condensed", "responsive"), 
+    full_width = FALSE, 
+    font_size = 10
+  )
+```
+---
+
+## Feature Importance of Random Forest 
+```{r echo = FALSE, fig.align = 'center', out.width = "55%"}
+# Adjust margins to create space for the y-axis label
+par(mar = c(5, 7, 4, 2)) # Increase the left margin (2nd value) to 8
+ 
+# Plot feature importance with a custom title
+varImpPlot(rf_model, 
+           main = "Random Forest Feature Importance",
+           n.var = min(30, nrow(rf_model$importance))) # Adjust number of features displayed
+ 
+# Add a y-axis label without overlap
+mtext("Features", side = 2, line = 6, cex = 1.2, adj = 0.5) # line=6 adjusts spacing
+```
+---
+
+## Analysis of Random Forest
+- Performs well overall
+     - High sensitivity/specificity for most classes
+     - "Obesity Type III" and "Obesity Type II" perfectly classified
+     - "Normal Weight" and "Overweight Level I" show some misclassification
+          - Sensitivity slightly lower, specificity remains high
+          
+- Model demonstrates strong positive predictive values
+     - When it predicts a class, it is usually correct
+     - Balanced accuracy high for all classes
+     
+- Improvements:
+     - Addressing class imbalances
+     - Fine-tuning hyperparameters to differentiate similar categories
+ 
+We can conclude that the random forest model is highly effective overall but shows room for improvement in separating closely related categories like "Normal Weight" and "Overweight Level I."
+---
+
+## Gradient Boosted Trees (XGBoost) for Large Dataset 
+**XGBoost Overview**:
+- Advanced gradient boosting implementation.
+- Designed for speed, scalability, and performance.
+
+**Key Features**:
+- Faster training and scalability for large datasets.
+- High accuracy with advanced regularization and optimization.
+- Flexible for diverse data types and custom loss functions.
+
+
+```{r include=FALSE}
+library(readr)
+library(dplyr)
+
+obesity = read.csv("C:/Users/cest_/OneDrive/Documents/WORK/CMDA4654/Project 2/archive/ObesityDataSet_raw_and_data_sinthetic.csv")
+head(obesity)
+
+## Renaming column names for readibility
+colnames(obesity) <- c("Age", "Gender", "Height", "Weight", "Caloric_Intake", "High_Calorie_Consump", "Vegetetable_Consump", "Main_Meals", "Sweet_Drinks_Consump", "Smoking", "Daily_Water_Intake", "Family_History_Overweight", "Physical_Activity_Frequency", "Time_Tech_Devices", "Food_Between_Meals_Consump", "Transportation_Type", "Obesity_Level")
+head(obesity)
+
+## Changing yes/no values to numeric 0 and 1
+obesity$High_Calorie_Consump <- ifelse(obesity$High_Calorie_Consump == "yes", 1, 0)
+obesity$Sweet_Drinks_Consump <- ifelse(obesity$Sweet_Drinks_Consump == "yes", 1, 0)
+obesity$Smoking <- ifelse(obesity$Smoking == "yes", 1, 0)
+obesity$Family_History_Overweight <- ifelse(obesity$Family_History_Overweight == "yes", 1, 0)
+
+## Converting Caloric Intake to numeric values
+obesity$Caloric_Intake <- dplyr::recode(obesity$Caloric_Intake, 
+                            "no" = 0, 
+                            "Sometimes" = 1, 
+                            "Frequently" = 2,
+                            "Always" = 3)
+
+## Converting Gender to numeric values
+obesity$Gender <- dplyr::recode(obesity$Gender, 
+                            "Female" = 0, 
+                            "Male" = 1)
+
+## Converting Consumption of Food Between Meals to numeric values
+obesity$Food_Between_Meals_Consump <- dplyr::recode(obesity$Food_Between_Meals_Consump, 
+                            "no" = 0, 
+                            "Sometimes" = 1, 
+                            "Frequently" = 2,
+                            "Always" = 3)
+
+## Converting Transportion Type to numeric values
+obesity$Transportation_Type <- dplyr::recode(obesity$Transportation_Type, 
+                            "Walking" = 0, 
+                            "Public_Transportation" = 1, 
+                            "Bike" = 2,
+                            "Motorbike" = 3,
+                            "Automobile" = 4)
+
+
+head(obesity)
+set.seed(123)
+summary(obesity)
+
+obesity$Obesity_Level <- as.factor(obesity$Obesity_Level)
+
+obesity_train = createDataPartition(obesity$Obesity_Level, p = 0.7, list = FALSE) 
+
+obesity_train_data <- obesity[obesity_train,]
+obesity_test_data <- obesity[-obesity_train,]
+
+obesity_train_matrix <- as.matrix(obesity_train_data[,-17])
+obesity_test_matrix <- as.matrix(obesity_test_data[, -17])
+
+# Convert to numeric values
+obesity_train_target <- as.numeric(obesity_train_data$Obesity_Level) - 1
+obesity_test_target <- as.numeric(obesity_test_data$Obesity_Level) - 1
+
+# nrounds: number of iterations
+# max_depth: number of trees
+# eta: learning rate
+# num_class: number of classes in target variable
+# objective: multiclass classification objective
+obesity_gradient_boost <- xgboost(data = obesity_train_matrix, 
+                                  label = obesity_train_target, 
+                                  nrounds = 100, 
+                                  objective = "multi:softmax", 
+                                  num_class = 7, 
+                                  max_depth = 3, 
+                                  eta = 0.1, 
+                                  verbose = 1)
+
+# Use prediction function to generate predictions
+obesity_pred <- predict(obesity_gradient_boost, newdata = obesity_test_matrix)
+
+# Generate confusion matrix to evaluate model accuracy
+obesity_confusion = confusionMatrix(factor(obesity_pred), factor(obesity_test_target))
+
+# Visualize feature importance
+xgb.plot.importance(xgb.importance(feature_names = colnames(obesity_train_matrix), model = obesity_gradient_boost))
+print(obesity_confusion)
+```
+
+---
+
+```{r include = FALSE}
+matrix <- xgb.plot.importance(xgb.importance(feature_names = colnames(obesity_train_matrix), model = obesity_gradient_boost))
+
+```
+
+```{r include=FALSE}
+xgb.plot.importance(matrix, rel_to_first = TRUE, top_n = 10)
+title(main = "Feature Importance for Obesity Prediction",
+      xlab = "Relative Importance",
+      ylab = "Features")
+grid(nx = NULL, ny = NULL, lty = "dotted", col = "lightgray")
+par(mar = c(5, 12, 4, 2))
+```
+
+
+```{r include=FALSE}
+png(filename = "LargeFeatureImportance.png", width = 2500, height = 2000, res = 300)
+xgb.plot.importance(xgb.importance(feature_names = colnames(obesity_train_matrix), model = obesity_gradient_boost))
+title(main = "Feature Importance for Obesity Prediction",
+      xlab = "Relative Importance",
+      ylab = "Features")
+grid(nx = NULL, ny = NULL, lty = "dotted", col = "lightgray")
+par(mar = c(5, 12, 4, 2))
+dev.off()
+```
+
+
+## Feature Importance for Large Dataset
+<div style="text-align:center; margin-top:-47px;">
+```{r echo=FALSE, fig.align='center', out.width = "85%"}
+library(magick)
+ 
+#Feature_imp <- image_read("C:/Users/cest_/OneDrive/Documents/WORK/CMDA4654/Project 2/FeatureImportance.png")
+#Feature_imp <- image_resize(Feature_imp, "26%")
+knitr::include_graphics("LargeFeatureImportance.png")
+```
+</div> 
+---
+
+## Confusion Matrix for Gradient Boost for Large Dataset
+```{r echo=FALSE}
+ 
+# Extract the confusion matrix and format it
+conf_matrix_xgb <- as.data.frame.matrix(obesity_confusion$table) # Convert to data frame
+conf_matrix_xgb <- cbind(Prediction = rownames(conf_matrix_xgb), conf_matrix_xgb) # Add row names as a new column
+rownames(conf_matrix_xgb) <- NULL  
+ 
+# Create a caption and format the table
+kable(conf_matrix_xgb, format = "html", caption = "Confusion Matrix for Gradient Boost Model", align = "c") %>%
+  kable_styling(
+    bootstrap_options = c("striped", "hover", "condensed", "responsive"), 
+    full_width = FALSE, 
+    font_size = 10
+  ) %>%
+  add_header_above(c(" " = 1, "Reference" = ncol(conf_matrix_xgb) - 1)) # Add "Reference" label
+ 
+ 
+# Overall Statistics
+overall_clean_xgb <- data.frame(
+  Statistic = c("Accuracy", "Kappa", "AccuracyLower", "AccuracyUpper"),
+  Value = c(
+    obesity_confusion$overall["Accuracy"],
+    obesity_confusion$overall["Kappa"],
+    obesity_confusion$overall["AccuracyLower"],
+    obesity_confusion$overall["AccuracyUpper"]
+  )
+)
+ 
+# Transpose for single-row display
+overall_clean_xgb <- as.data.frame(t(overall_clean_xgb$Value))
+colnames(overall_clean_xgb) <- c("Accuracy", "Kappa", "AccuracyLower", "AccuracyUpper")
+ 
+kable(overall_clean_xgb, format = "html", caption = "Overall Statistics") %>%
+  kable_styling(
+    bootstrap_options = c("striped", "hover", "condensed", "responsive"), 
+    full_width = FALSE, 
+    font_size = 10
+  )
+ 
+# Statistics by Class 
+class_clean_xgb <- obesity_confusion$byClass[, c("Sensitivity", "Specificity")]
+ 
+# Transpose the table for better readability
+class_clean_xgb_transposed <- as.data.frame(t(class_clean_xgb))
+colnames(class_clean_xgb_transposed) <- paste0("Class_", 0:6)  
+rownames(class_clean_xgb_transposed) <- c("Sensitivity", "Specificity")  
+ 
+kable(class_clean_xgb_transposed, format = "html", caption = "Statistics by Class") %>%
+  kable_styling(
+    bootstrap_options = c("striped", "hover", "condensed", "responsive"), 
+    full_width = FALSE, 
+    font_size = 10
+  )
+ 
+```
+
+---
+
+## AdaBoost for Large Dataset [CODE]
+
+```{r include=FALSE}
+library(readr) ## For reading dataset
+library(dplyr) ## For data manipulastion
+library(adabag) ## For AdaBoost
+
+obesity = read.csv("C:/Users/cest_/OneDrive/Documents/WORK/CMDA4654/Project 2/archive/ObesityDataSet_raw_and_data_sinthetic.csv")
+head(obesity)
+
+## Renaming column names for readibility
+colnames(obesity) <- c("Age", "Gender", "Height", "Weight", "Caloric_Intake", "High_Calorie_Consump", "Vegetetable_Consump", "Main_Meals", "Sweet_Drinks_Consump", "Smoking", "Daily_Water_Intake", "Family_History_Overweight", "Physical_Activity_Frequency", "Time_Tech_Devices", "Food_Between_Meals_Consump", "Transportation_Type", "Obesity_Level")
+head(obesity)
+ 
+## Changing yes/no values to numeric 0 and 1
+obesity$High_Calorie_Consump <- ifelse(obesity$High_Calorie_Consump == "yes", 1, 0)
+obesity$Sweet_Drinks_Consump <- ifelse(obesity$Sweet_Drinks_Consump == "yes", 1, 0)
+obesity$Smoking <- ifelse(obesity$Smoking == "yes", 1, 0)
+obesity$Family_History_Overweight <- ifelse(obesity$Family_History_Overweight == "yes", 1, 0)
+ 
+## Converting Caloric Intake to numeric values
+obesity$Caloric_Intake <- dplyr::recode(obesity$Caloric_Intake, 
+                            "no" = 0, 
+                            "Sometimes" = 1, 
+                            "Frequently" = 2,
+                            "Always" = 3)
+ 
+## Converting Gender to numeric values
+obesity$Gender <- dplyr::recode(obesity$Gender, 
+                            "Female" = 0, 
+                            "Male" = 1)
+ 
+## Converting Consumption of Food Between Meals to numeric values
+obesity$Food_Between_Meals_Consump <- dplyr::recode(obesity$Food_Between_Meals_Consump, 
+                            "no" = 0, 
+                            "Sometimes" = 1, 
+                            "Frequently" = 2,
+                            "Always" = 3)
+ 
+## Converting Transportion Type to numeric values
+obesity$Transportation_Type <- dplyr::recode(obesity$Transportation_Type, 
+                            "Walking" = 0, 
+                            "Public_Transportation" = 1, 
+                            "Bike" = 2,
+                            "Motorbike" = 3,
+                            "Automobile" = 4)
+head(obesity) 
+summary(obesity)
+```
+
+```{r echo=TRUE, results = "hide", message=FALSE, warning=FALSE, fig.show="hide"}
+library(readr) ## For reading dataset
+library(dplyr) ## For data manipulastion
+library(adabag) ## For AdaBoost
+
+set.seed(123) ## For reproducibility
+
+## Change Obesity Level to a factor 
+obesity$Obesity_Level <- as.factor(obesity$Obesity_Level)
+
+## Create a 70/30 split for training
+obesity_train_ada = createDataPartition(obesity$Obesity_Level, 
+                                        p = 0.7, 
+                                        list = FALSE)
+ 
+obesity_train_data_ada <- obesity[obesity_train_ada,]
+obesity_test_data_ada <- obesity[-obesity_train_ada,]
+```
+---
+## AdaBoost for Large Dataset [CODE] Part 2
+```{r echo=TRUE, results = "hide", message=FALSE, warning=FALSE, fig.show="hide"}
+## Building the AdaBoost model
+adaboost_model <- boosting(Obesity_Level ~ ., 
+                           data = obesity_train_data_ada, 
+                           boos = TRUE, mfinal = 50)
+## Making predictions on the test set
+adaboost_predictions <- predict.boosting(adaboost_model, 
+                                         newdata = 
+                                           obesity_test_data_ada)
+ 
+## Convert predicted classes to factor for comparison
+predicted_classes <- factor(adaboost_predictions$class, 
+                            levels = 
+                              levels(
+                                obesity_test_data_ada$Obesity_Level))
+actual_classes <- factor(obesity_test_data_ada$Obesity_Level)
+
+## Compute confusion matrix
+confusion <- confusionMatrix(predicted_classes, actual_classes)
+```
+---
+## AdaBoost for Large Dataset
+```{r echo=FALSE}
+# Extract Confusion Matrix
+conf_matrix_ada <- as.data.frame.matrix(confusion$table)
+ 
+# Display Confusion Matrix
+kable(conf_matrix_ada, format = "html", caption = "Confusion Matrix for AdaBoost Model") %>%
+  kable_styling(
+    bootstrap_options = c("striped", "hover", "condensed", "responsive"), 
+    full_width = FALSE, 
+    font_size = 8
+  )
+ 
+# Extract Overall Statistics
+overall_clean_ada <- data.frame(
+  Statistic = c("Accuracy", "Kappa", "AccuracyLower", "AccuracyUpper"),
+  Value = c(
+    confusion$overall["Accuracy"],
+    confusion$overall["Kappa"],
+    confusion$overall["AccuracyLower"],
+    confusion$overall["AccuracyUpper"]
+  )
+)
+ 
+# Transpose for single-row display
+overall_clean_ada <- as.data.frame(t(overall_clean_ada$Value))
+colnames(overall_clean_ada) <- c("Accuracy", "Kappa", "AccuracyLower", "AccuracyUpper")
+ 
+# Display Overall Statistics
+kable(overall_clean_ada, format = "html", caption = "Overall Statistics") %>%
+  kable_styling(
+    bootstrap_options = c("striped", "hover", "condensed", "responsive"), 
+    full_width = FALSE, 
+    font_size = 8
+  )
+ 
+# Extract Statistics by Class (Sensitivity and Specificity)
+class_clean_ada <- confusion$byClass[, c("Sensitivity", "Specificity")]
+ 
+# Transpose for better readability
+class_clean_ada_transposed <- as.data.frame(t(class_clean_ada))
+colnames(class_clean_ada_transposed) <- paste0("Class_", 1:ncol(class_clean_ada)) 
+rownames(class_clean_ada_transposed) <- c("Sensitivity", "Specificity")
+ 
+# Display Statistics by Class
+kable(class_clean_ada_transposed, format = "html", caption = "Statistics by Class") %>%
+  kable_styling(
+    bootstrap_options = c("striped", "hover", "condensed", "responsive"), 
+    full_width = FALSE, 
+    font_size = 8
+  )
+```
+
+---
+
+## Comparing Results Across Models
+```{r echo=FALSE}
+# High-level comparison table
+model_comparison_highlevel <- data.frame(
+  Model = c("Gradient Boosting", "AdaBoost"),
+  Accuracy = c(0.9415, 0.9731),
+  Kappa = c(0.9316, 0.9686),
+  Pros = c("Good overall accuracy, strong general performance.", 
+           "Excellent accuracy and sensitivity, especially for Obesity and Overweight classes."),
+  Cons = c("Slightly lower sensitivity for certain classes.",
+           "Slightly lower specificity in some categories, but still strong overall.")
+)
+ 
+# Display the formatted comparison table
+kable(model_comparison_highlevel, format = "html", caption = "Model Comparison for Gradient Boosting and AdaBoost") %>%
+  kable_styling(
+    bootstrap_options = c("striped", "hover", "condensed", "responsive"),
+    full_width = FALSE,
+    font_size = 15
+  )
+```
+---
+
+## Limitations and Potential Pitfalls 
+Challenges associated with boosted trees consists of the algorithm being:
+ 
+- Computationally expensive 
+
+- Slow for large datasets
+
+- Has a tendency for overfitting (i.e. when the number of trees is too high)
+     - Fixed by using a lower training rate
+
+- Sensitive to outliers 
+
+- classifiers must fix the errors from previous trees, therefore it may 
+overemphasize outliers. 
+     - Cross validation can be used to address this
+
+---
+
+## Practical Applications of Boosted Trees 
+Boosted trees are an incredibly valuable tool for data scientists and can be applied to many facets of industry, research, and business.    
+ 
+Some practical real-world applications of boosted trees include:
+- **Financial Services**
+      - Fraud detection
+      - Price forecasting
+      - Customer churn prediction
+      - Credit risk assessment
+
+- **Healthcare Analytics**
+      - Medical diagnoses
+
+- **Sentiment Analysis**
+---
+
+## Conclusion and Key Takeaways 
+```{r echo=FALSE}
+# Create a data frame for the conclusion and key takeaways
+conclusion_takeaways <- data.frame(
+  Model = c("Single Tree", "Random Forest", "XGBoost (Obesity)", "AdaBoost", "XGBoost (Iris)"),
+  Key_Takeaways = c(
+    "88.61% accuracy; struggles with 'Normal Weight' (sensitivity 59.3%).",
+    "Improved accuracy; strong specificity; challenges with similar classes.",
+    "High accuracy; key predictors: 'Weight', 'Family History', 'Caloric Intake'.",
+    "Strong results; sensitive to noise; requires careful tuning.",
+    "93.33% accuracy; 'Setosa' and 'Virginica' perfect; 2 'Versicolor' misclassified."
+  )
+)
+
+# Display the table
+knitr::kable(conclusion_takeaways)
+
+```
+
+---
+
+## References 
+**Dataset:** https://www.kaggle.com/datasets/abdelrahman16/obesity-dataset
+**Clean Dataset:** https://drive.google.com/file/d/1x5jE0lJ_HX92F3pr2co8IfqIcT6zXuuy/view?usp=sharing
+ 
+“Boosting.” Corporate Finance Institute, 21 Nov. 2023, corporatefinanceinstitute.com/resources/data-science/boosting/.
+ 
+FNAL, indico.fnal.gov/event/15356/contributions/31377/attachments/19671/24560
+/DecisionTrees.pdf. Accessed 26 Nov. 2024.
+ 
+Gaurav. “An Introduction to Gradient Boosting Decision Trees.” Machine Learning Plus, 8 Mar. 2022, www.machinelearningplus.com/machine-learning/an-introduction-to-gradient-boosting-decision-trees/#Learning-rate-and-n_estimators-(Hyperparameters).
+ 
+What Is Boosting? - Boosting in Machine Learning Explained - AWS, aws.amazon.com/what-is/boosting/. Accessed 26 Nov. 2024.
+ 
+Wizards, Data Science. “Understanding the ADABOOST Algorithm.” Medium, Medium, 7 July 2023, medium.com/@datasciencewizards/understanding-the-adaboost-algorithm-2e9344d83d9b.
