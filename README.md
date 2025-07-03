@@ -9,7 +9,8 @@
   <h2>🎯 Presentation Goals</h2>
   <ul>
     <li><strong>Explain Boosted Trees</strong><br>
-    Provide a clear, concise introduction to the algorithm, including the motivation behind boosting and its theoretical foundations.</li>
+    Provide a clear, concise introduction to the algorithm, including the motivation behind boosting and its theoretical foundations.
+    </li>
 
     <li><strong>Illustrate Key Concepts</strong><br>
       Cover critical concepts such as:
