@@ -6,43 +6,45 @@
     This project presents a comprehensive educational overview of <strong>Boosted Trees</strong>, a powerful ensemble learning method widely used for both classification and regression tasks. The presentation is designed as part of a Statistical/Machine Learning course to help classmates understand the theory, motivation, and real-world applications of boosted trees.
   </p>
 
-  <h2>🎯 Presentation Goals</h2>
-  <ul>
-    <li><strong>Explain Boosted Trees</strong><br>
+<h2>🎯 Presentation Goals</h2>
+<ul>
+  <li><strong>Explain Boosted Trees</strong><br>
     Provide a clear, concise introduction to the algorithm, including the motivation behind boosting and its theoretical foundations.
-    </li>
+  </li>
 
-    <li><strong>Illustrate Key Concepts</strong><br>
-      Cover critical concepts such as:
-      <ul>
-        <li>Weak learners (e.g., decision stumps)</li>
-        <li>Gradient boosting</li>
-        <li>Boosting rounds</li>
-        <li>Learning rate, tree depth, and regularization</li>
-      </ul>
-    </li>
+  <li><strong>Illustrate Key Concepts</strong><br>
+    Cover critical concepts such as:
+    <ul>
+      <li>Weak learners (e.g., decision stumps)</li>
+      <li>Gradient boosting</li>
+      <li>Boosting rounds</li>
+      <li>Learning rate, tree depth, and regularization</li>
+    </ul>
+  </li>
 
-    <li><strong>Demonstrate Using Examples</strong><br>
-      Use two datasets:
-      <ul>
-        <li>A small “baby” dataset (<code>iris</code> or <code>mtcars</code>) for illustration</li>
-        <li>A larger, real-world dataset on obesity-related hospital procedures</li>
-      </ul>
-    </li>
+  <li><strong>Demonstrate Using Examples</strong><br>
+    Use two datasets:
+    <ul>
+      <li>A small “baby” dataset (<code>iris</code> or <code>mtcars</code>) for illustration</li>
+      <li>A larger, real-world dataset on obesity-related hospital procedures</li>
+    </ul>
+  </li>
 
-    <li><strong>Guide Through Practical Implementation</strong><br>
-      Include annotated R code snippets demonstrating:
-      <ul>
-        <li>Data preparation</li>
-        <li>Model fitting using <code>xgboost</code> or <code>gbm</code></li>
-        <li>Tuning hyperparameters</li>
-        <li>Evaluating performance with metrics and visualizations</li>
-      </ul>
-    </li>
+  <li><strong>Guide Through Practical Implementation</strong><br>
+    Include annotated R code snippets demonstrating:
+    <ul>
+      <li>Data preparation</li>
+      <li>Model fitting using <code>xgboost</code> or <code>gbm</code></li>
+      <li>Tuning hyperparameters</li>
+      <li>Evaluating performance with metrics and visualizations</li>
+    </ul>
+  </li>
 
-    <li><strong>Discuss Applications and Limitations</strong><br>
-    Explore use cases of boosted trees in medicine, marketing, and finance, and discuss model interpretability and overfitting concerns.</li>
-  </ul>
+  <li><strong>Discuss Applications and Limitations</strong><br>
+    Explore use cases of boosted trees in medicine, marketing, and finance, and discuss model interpretability and overfitting concerns.
+  </li>
+</ul>
+
 
   <h2>📁 File Structure</h2>
   <pre><code>
