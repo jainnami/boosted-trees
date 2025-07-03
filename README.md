@@ -1,11 +1,5 @@
 # Project 2: Boosted Trees - Statistical/Machine Learning Presentation
 
-## Group Members
-- Nami Jain
-- Christian Lautere
-- Brandon Huang
-- Jianlai Liu
-
 ## Project Overview
 This project provides an educational presentation on **Boosted Trees** as part of a Statistical/Machine Learning course. Boosted Trees are a powerful ensemble learning method used for both classification and regression tasks. This presentation is designed to introduce the theory, motivation, and practical implementation of boosted trees to classmates, with a focus on explaining key concepts, demonstrating the method on example datasets, and discussing real-world applications.
 
